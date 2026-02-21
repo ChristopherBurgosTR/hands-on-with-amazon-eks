@@ -173,6 +173,7 @@ Resources:
               - elasticloadbalancing:AddListenerCertificates
               - elasticloadbalancing:RemoveListenerCertificates
               - elasticloadbalancing:ModifyRule
+              - elasticloadbalancing:SetRulePriorities
             Resource: '*'
 Outputs:
   IamPolicyArn:
