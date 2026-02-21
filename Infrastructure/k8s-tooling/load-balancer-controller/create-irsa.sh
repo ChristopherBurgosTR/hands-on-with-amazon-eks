@@ -1,5 +1,8 @@
 helm repo add eks https://aws.github.io/eks-charts
 
+# IRSA requires an IAM OIDC provider for the cluster (idempotent)
+eksctl utils associate-iam-oidc-provider --region=us-east-1 --cluster=eks-acg --approve
+
 aws cloudformation deploy \
     --stack-name aws-load-balancer-iam-policy \
     --template-file iam-policy.yaml \
