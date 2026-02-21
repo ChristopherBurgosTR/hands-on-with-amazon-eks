@@ -1,1 +1,1 @@
-helm upgrade --install sample-app .
+helm upgrade --install sample-app --set ssl.enabled=false .
