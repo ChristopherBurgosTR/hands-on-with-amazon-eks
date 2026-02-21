@@ -9,6 +9,8 @@ echo "********* CHAPTER 2 - STARTED AT $(date) **********"
 echo "***************************************************"
 echo "--- This could take around 10 minutes"
 
+command -v helm >/dev/null 2>&1 || { echo "helm is required but not installed. Run: $REPO_ROOT/scripts-by-chapter/install-prerequisites.sh && export PATH=\"\$HOME/bin:\$PATH\""; exit 1; }
+
 # Getting NodeGroup IAM Role from Kubernetes Cluster
     nodegroup_iam_role=$(aws cloudformation list-exports --query "Exports[?contains(Name, 'nodegroup-eks-node-group::InstanceRoleARN')].Value" --output text | xargs | cut -d "/" -f 2)
 
@@ -39,6 +41,8 @@ echo "--- This could take around 10 minutes"
 # Adding DynamoDB Permissions to the node
     aws iam attach-role-policy --role-name "${nodegroup_iam_role}" --policy-arn arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
 
+# Create development namespace (used by app Helm charts and Chapter 3; idempotent)
+    kubectl create namespace development 2>/dev/null || true
 
 # Installing the applications
     ( cd "$REPO_ROOT/resource-api/infra/helm" && ./create.sh ) & \
