@@ -20,12 +20,20 @@ command -v helm >/dev/null 2>&1 || { echo "helm is required but not installed. R
     if [ -n "$aws_lb_controller_policy" ]; then
       aws iam attach-role-policy --role-name "${nodegroup_iam_role}" --policy-arn "${aws_lb_controller_policy}"
     fi
+    echo "Waiting for AWS Load Balancer Controller and webhook to be ready..."
+    kubectl wait --for=condition=available deployment/aws-load-balancer-controller -n kube-system --timeout=120s 2>/dev/null || true
+    echo "Allowing webhook CA to propagate (avoids 'certificate signed by unknown authority' when installing external-dns)..."
+    sleep 30
 
 # Create SSL Certfiicate in ACM
     ( cd "$REPO_ROOT/Infrastructure/cloudformation/ssl-certificate" && ./create.sh )
 
-# Installing ExternalDNS
-    "$REPO_ROOT/Infrastructure/k8s-tooling/external-dns/create.sh"
+# Installing ExternalDNS (retry once after delay if webhook TLS error occurs)
+    if ! "$REPO_ROOT/Infrastructure/k8s-tooling/external-dns/create.sh"; then
+      echo "External-dns install failed (possibly webhook CA race). Waiting 45s and retrying once..."
+      sleep 45
+      "$REPO_ROOT/Infrastructure/k8s-tooling/external-dns/create.sh" || true
+    fi
     aws iam attach-role-policy --role-name "${nodegroup_iam_role}" --policy-arn arn:aws:iam::aws:policy/AmazonRoute53FullAccess
 
 #  Create the DynamoDB Tables
