@@ -1,0 +1,31 @@
+# Scenario: ImagePullBackOff / ErrImagePull
+# Image name or tag does not exist (or no pull access). Scheduler places the pod,
+# then kubelet fails to pull → ErrImagePull, then after retries → ImagePullBackOff.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: imagepull-demo
+  labels:
+    app: imagepull-demo
+    scenario: image-pull-backoff
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: imagepull-demo
+  template:
+    metadata:
+      labels:
+        app: imagepull-demo
+        scenario: image-pull-backoff
+    spec:
+      containers:
+        - name: app
+          # Intentionally wrong: image does not exist → ErrImagePull then ImagePullBackOff
+          image: nosuchregistry.example.com/nosuchimage:nosuchtag
+          command: ["sleep", "3600"]
+          resources:
+            requests:
+              memory: "16Mi"
+              cpu: "10m"

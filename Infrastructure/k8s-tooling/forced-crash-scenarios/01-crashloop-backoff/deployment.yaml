@@ -1,0 +1,35 @@
+# Scenario: CrashLoopBackOff
+# Container exits with code 1 → Kubernetes restarts → CrashLoopBackOff
+#
+# Apply:  kubectl apply -f .
+# Remove: kubectl delete -f .
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crashloop-demo
+  labels:
+    app: crashloop-demo
+    scenario: crashloop-backoff
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: crashloop-demo
+  template:
+    metadata:
+      labels:
+        app: crashloop-demo
+        scenario: crashloop-backoff
+    spec:
+      containers:
+        - name: crash
+          image: busybox:1.36
+          command: ["sh", "-c", "echo 'Intentional crash for demo'; exit 1"]
+          resources:
+            requests:
+              memory: "16Mi"
+              cpu: "10m"
+            limits:
+              memory: "32Mi"
+              cpu: "50m"
