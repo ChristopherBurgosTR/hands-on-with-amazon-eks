@@ -1,0 +1,62 @@
+# Finalizer cleanup controller — removes example.com/block-deletion from terminating pods.
+# Build the image from the parent dir: docker build -t finalizer-cleanup-controller:latest .
+# For EKS: push to your ECR and set image below; ensure the default SA can list/patch pods or add RBAC.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: finalizer-cleanup-controller
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: finalizer-cleanup-controller
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["list", "get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: finalizer-cleanup-controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: finalizer-cleanup-controller
+subjects:
+  - kind: ServiceAccount
+    name: finalizer-cleanup-controller
+    namespace: default
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: finalizer-cleanup-controller
+  namespace: default
+  labels:
+    app: finalizer-cleanup-controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: finalizer-cleanup-controller
+  template:
+    metadata:
+      labels:
+        app: finalizer-cleanup-controller
+    spec:
+      serviceAccountName: finalizer-cleanup-controller
+      containers:
+        - name: controller
+          # Replace with your image after: docker build -t <registry>/finalizer-cleanup-controller:latest .
+          image: finalizer-cleanup-controller:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: FINALIZER_NAME
+              value: "example.com/block-deletion"
+            # - name: NAMESPACE
+            #   value: "default"   # uncomment to only watch default namespace
+            - name: POLL_INTERVAL
+              value: "5"
