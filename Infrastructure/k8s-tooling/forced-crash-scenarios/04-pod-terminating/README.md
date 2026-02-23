@@ -19,7 +19,7 @@ The pod stays **Terminating** because a **finalizer** is set and never removed. 
 ## What you'll see
 
 - `kubectl get pods`: the pod **terminating-demo** shows status **Terminating** (and may stay that way indefinitely).
-- `kubectl describe pod terminating-demo`: in **Metadata** you’ll see **Finalizers** with `example.com/block-deletion`. The API server won’t delete the object until that finalizer is removed.
+- `kubectl describe pod terminating-demo`: in **Metadata** you’ll see **Finalizers** with `example.com/block-deletion`. The API server won’t delete the object until that finalizer is removed. To view finalizers use `kubectl get pod terminating-demo -o yaml` (describe often omits them).
 
 ## How to fix the problem
 
@@ -31,9 +31,9 @@ The pod stays **Terminating** because a **finalizer** is set and never removed. 
    ```
 2. Inspect the pod and find **Finalizers**:
    ```bash
-   kubectl describe pod terminating-demo
-   # or
    kubectl get pod terminating-demo -o yaml | grep -A3 finalizers
+   # (kubectl describe often does not show finalizers; use get -o yaml)
+   # kubectl describe pod terminating-demo
    ```
    You’ll see `finalizers: [example.com/block-deletion]`. Nothing in this demo removes that, so the pod never completes deletion.
 
@@ -41,11 +41,20 @@ The pod stays **Terminating** because a **finalizer** is set and never removed. 
 
 Remove the finalizer:
 
+**Option A — Manual patch (one-off):**
+
 ```bash
 kubectl patch pod terminating-demo -p '{"metadata":{"finalizers":null}}' --type=merge
 ```
 
-As soon as you do that, the API server completes the deletion and the pod disappears from `kubectl get pods`.
+**Option B — Run a controller** that removes this finalizer for any stuck pod (see [finalizer-cleanup-controller](../../finalizer-cleanup-controller/README.md)):
+
+```bash
+# From repo root: run locally or deploy in-cluster
+cd Infrastructure/k8s-tooling/finalizer-cleanup-controller && python controller.py
+```
+
+As soon as the finalizer is removed, the API server completes the deletion and the pod disappears from `kubectl get pods`.
 
 **Verify:**
 
