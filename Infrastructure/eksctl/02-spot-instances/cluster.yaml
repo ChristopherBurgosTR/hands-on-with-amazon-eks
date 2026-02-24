@@ -13,7 +13,9 @@ vpc:
 
 nodeGroups:
   - name: eks-node-group-spot-instances
-    desiredCapacity: 3
+    minSize: 2
+    maxSize: 3
+    desiredCapacity: 2
     privateNetworking: true
     instancesDistribution:
       instanceTypes: ["t3.medium", "t3a.medium"]

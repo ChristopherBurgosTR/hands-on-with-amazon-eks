@@ -14,7 +14,9 @@ vpc:
 managedNodeGroups:
   - name: eks-node-group-managed-nodes
     instanceType: t3.medium
-    desiredCapacity: 3
+    minSize: 2
+    maxSize: 3
+    desiredCapacity: 2
     privateNetworking: true
 
 fargateProfiles:
