@@ -1,6 +1,6 @@
-# kubectl & eksctl Cheat Sheet — Debugging & Operations on AWS EKS
+# kubectl Cheat Sheet — Debugging & Operations on Kubernetes / EKS
 
-General-purpose reference for debugging and operating Kubernetes on Amazon EKS. Replace `<namespace>`, `<cluster-name>`, `<pod>`, etc. with your values.
+General-purpose reference for debugging and operating Kubernetes (including Amazon EKS). Replace `<namespace>`, `<pod>`, `<name>`, etc. with your values.
 
 ---
 
@@ -18,7 +18,7 @@ General-purpose reference for debugging and operating Kubernetes on Amazon EKS. 
 
 ---
 
-## 2. kubectl — Logs (debugging runtime behavior)
+## 2. Logs (debugging runtime behavior)
 
 **When to use:** App errors, crashes, what the process is doing. Always specify `-n <namespace>` for workload pods.
 
@@ -47,7 +47,7 @@ kubectl logs -n kube-system -l k8s-app=kube-dns -f
 
 ---
 
-## 3. kubectl — Inspect resources (get & describe)
+## 3. Inspect resources (get & describe)
 
 **When to use:** See status, find names, understand why something isn’t working. **Events** at the bottom of `describe` are the first place to look for scheduling/image/volume errors.
 
@@ -86,11 +86,11 @@ kubectl get pod <pod> -n <namespace> -o jsonpath='{.spec.containers[*].image}'
 kubectl get deploy <name> -n <namespace> -o yaml
 ```
 
-Use **get -o yaml** when you need the exact image, volume mount path, or resource limits. Fix issues in the **controller** (Deployment/StatefulSet), not the Pod—Pods are recreated from the controller.
+Fix issues in the **controller** (Deployment/StatefulSet), not the Pod—Pods are recreated from the controller.
 
 ---
 
-## 4. kubectl — Debugging common pod issues
+## 4. Debugging common pod issues
 
 | Problem | What to run | What to check |
 |---------|-------------|----------------|
@@ -100,7 +100,7 @@ Use **get -o yaml** when you need the exact image, volume mount path, or resourc
 | **Pod stuck Terminating** | `kubectl get pod <pod> -n <namespace> -o yaml` | Look for `finalizers`; if a controller is gone, you may need to patch finalizers (advanced) |
 | **Not Ready** (Readiness probe) | `kubectl logs -n <namespace> <pod>` | App not responding on probe port/path; fix app or probe |
 
-**Fix ImagePullBackOff:** Set image on the **Deployment** (or StatefulSet), not the Pod. Use a **full image URL** (e.g. `123456789.dkr.ecr.us-east-1.amazonaws.com/myapp:v1`).
+**Fix ImagePullBackOff:** Set image on the **Deployment** (or StatefulSet), not the Pod. Use a **full image URL** (e.g. ECR: `123456789.dkr.ecr.us-east-1.amazonaws.com/myapp:v1`).
 
 ```bash
 kubectl set image deployment/<name> <container>=<full-image-url>:<tag> -n <namespace>
@@ -110,7 +110,7 @@ kubectl edit deployment <name> -n <namespace>
 
 ---
 
-## 5. kubectl — Nodes (cordon, uncordon, drain)
+## 5. Nodes (cordon, uncordon, drain)
 
 | Goal | Command |
 |------|---------|
@@ -122,7 +122,7 @@ kubectl edit deployment <name> -n <namespace>
 
 ---
 
-## 6. kubectl — Rollouts and restarts
+## 6. Rollouts and restarts
 
 | Goal | Command |
 |------|---------|
@@ -132,11 +132,11 @@ kubectl edit deployment <name> -n <namespace>
 | Undo last rollout | `kubectl rollout undo deployment/<name> -n <namespace>` |
 | Scale to zero | `kubectl scale deployment/<name> -n <namespace> --replicas=0` |
 | Scale up | `kubectl scale deployment/<name> -n <namespace> --replicas=3` |
-| Restart all pods in namespace (e.g. after config change) | `kubectl delete pods -n <namespace> -l app=<label>` or `kubectl delete pods -n <namespace> --field-selector=status.phase=Running` (then let Deployment recreate) |
+| Restart all pods in namespace | `kubectl delete pods -n <namespace> -l app=<label>` or `kubectl delete pods -n <namespace> --field-selector=status.phase=Running` (Deployment recreates) |
 
 ---
 
-## 7. kubectl — Apply, create, and wait
+## 7. Apply, create, and wait
 
 ```bash
 kubectl apply -f <file-or-dir>
@@ -148,111 +148,39 @@ kubectl set env deployment/<name> KEY=value -n <namespace>
 
 ---
 
-## 8. EKS / AWS — Cluster and kubeconfig
+## 8. Connecting to EKS (kubeconfig)
 
-**Connect to the cluster:**
+**One-time (after cluster exists):**
 
 ```bash
 aws eks update-kubeconfig --region <region> --name <cluster-name>
 kubectl get nodes   # verify
 ```
 
-**"Connection refused" to localhost (8080, 8888, etc.):** kubectl has no cluster in kubeconfig, so it tries localhost. Run `aws eks update-kubeconfig --region <region> --name <cluster-name>` (use your cluster name; list with `aws eks list-clusters --region <region>`), then retry.
+**"Connection refused" to localhost:** kubectl has no cluster in kubeconfig. Run `aws eks update-kubeconfig --region <region> --name <cluster-name>`. List clusters: `aws eks list-clusters --region <region>`.
 
-**AWS CLI (EKS):**
-
-```bash
-aws eks describe-cluster --name <cluster-name> --region <region>
-aws eks list-clusters --region <region>
-aws eks list-nodegroups --cluster-name <cluster-name> --region <region>
-```
-
-**IAM and cluster access (EKS uses `aws-auth` ConfigMap):**
+**IAM and cluster access (EKS `aws-auth` ConfigMap):**
 
 ```bash
-# See who is mapped (role ARN → user/group)
 kubectl get configmap aws-auth -n kube-system -o yaml
 ```
 
-Adding or debugging IAM access is done via **eksctl** (see below) or by editing `aws-auth` (advanced).
-
 ---
 
-## 9. eksctl — Cluster and node groups (lifecycle)
-
-```bash
-# Create cluster from config file
-eksctl create cluster -f cluster.yaml
-
-# List / create / delete node groups
-eksctl get nodegroups --cluster <cluster-name>
-eksctl create nodegroup -f nodegroup.yaml
-eksctl delete nodegroup --cluster <cluster-name> <nodegroup-name>
-
-# Fargate
-eksctl create fargateprofile -f fargate-profile.yaml
-eksctl get fargateprofile --cluster <cluster-name>
-```
-
----
-
-## 10. eksctl — OIDC and IRSA (IAM roles for service accounts)
-
-Pods use an IAM role via IRSA (no long-lived keys). OIDC must be associated once per cluster.
-
-```bash
-# One-time per cluster
-eksctl utils associate-iam-oidc-provider --cluster <cluster-name> --approve
-
-# Create IAM service account (role + K8s SA)
-eksctl create iamserviceaccount \
-  --name <service-account-name> \
-  --namespace <namespace> \
-  --cluster <cluster-name> \
-  --attach-policy-arn <policy-arn> \
-  --approve
-
-# List IRSA roles
-eksctl get iamserviceaccount --cluster <cluster-name>
-```
-
-**Debugging IRSA:** Pod not getting credentials? Check: (1) ServiceAccount has `eks.amazonaws.com/role-arn` annotation, (2) OIDC provider exists for cluster, (3) trust policy on the IAM role allows that OIDC and the K8s SA.
-
----
-
-## 11. eksctl — IAM identity mapping (human/CI access to cluster)
-
-Maps an IAM role or user to a Kubernetes user/group so they can use `kubectl` (e.g. CodeBuild, GitHub Actions).
-
-```bash
-eksctl create iamidentitymapping \
-  --cluster <cluster-name> \
-  --arn <iam-role-or-user-arn> \
-  --username <kubernetes-username> \
-  --group system:masters
-
-# List mappings
-eksctl get iamidentitymapping --cluster <cluster-name>
-```
-
-**Debugging “access denied”:** Run `kubectl get cm aws-auth -n kube-system -o yaml` and confirm the role ARN is in the mapRoles section (or add it via `eksctl create iamidentitymapping`).
-
----
-
-## 12. Debugging flows (general)
+## 9. Debugging flows
 
 | Scenario | Steps |
 |----------|--------|
 | **Pod not starting** | `kubectl get pods -n <ns>` → `kubectl describe pod <pod> -n <ns>` (Events) → fix image/resources/volumes on Deployment if needed. |
 | **App not reachable** | `kubectl get ingress -n <ns>` (ADDRESS?) → `kubectl get svc -n <ns>` → `kubectl get endpoints -n <ns>` (pods behind Svc?) → `kubectl logs -n <ns> deployment/<name>`. |
-| **Ingress has no ADDRESS** | Check AWS Load Balancer Controller: `kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller` and `kubectl logs -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller -f`. Controller needs IRSA and subnet tags for ALB. |
+| **Ingress has no ADDRESS** | Check AWS Load Balancer Controller: `kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller` and `kubectl logs -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller -f`. |
 | **Node NotReady** | `kubectl describe node <node>` (conditions); check VPC CNI: `kubectl get pods -n kube-system -l k8s-app=aws-node` and their logs. |
-| **“Access denied” to API** | `kubectl get cm aws-auth -n kube-system -o yaml`; ensure your IAM principal is mapped (eksctl get iamidentitymapping / create iamidentitymapping). |
-| **Need to restart system component** | Restart VPC CNI: `kubectl delete pods -n kube-system -l k8s-app=aws-node`. Restart LBC: delete pods with label `app.kubernetes.io/name=aws-load-balancer-controller`. |
+| **"Access denied" to API** | `kubectl get cm aws-auth -n kube-system -o yaml`; ensure your IAM principal is mapped (use **eksctl** to add: see `_docs/eksctl-cheatsheet.md`). |
+| **Restart system component** | VPC CNI: `kubectl delete pods -n kube-system -l k8s-app=aws-node`. LBC: delete pods with label `app.kubernetes.io/name=aws-load-balancer-controller`. |
 
 ---
 
-## 13. Handy flags and shortcuts
+## 10. Handy flags
 
 | Flag | Meaning |
 |------|---------|
@@ -269,10 +197,10 @@ eksctl get iamidentitymapping --cluster <cluster-name>
 
 ---
 
-## 14. Prerequisites
+## Prerequisites
 
-- **kubectl:** Install and add to PATH; then `aws eks update-kubeconfig --region <region> --name <cluster-name>`.
-- **eksctl:** Install from [eksctl.io](https://eksctl.io) or your repo’s install script.
-- **AWS CLI:** Configured with credentials that can call EKS and IAM (`aws sts get-caller-identity`).
+- **kubectl:** Installed and on PATH.
+- **EKS:** Run `aws eks update-kubeconfig --region <region> --name <cluster-name>` to use kubectl with your cluster.
+- **AWS CLI:** Configured (`aws sts get-caller-identity`).
 
-For more context and repo-specific examples, see `_docs/kubectl-eksctl-logging-troubleshooting.md`.
+See also: `_docs/eksctl-cheatsheet.md` (cluster creation, IRSA, IAM mapping), `_docs/kubectl-eksctl-logging-troubleshooting.md` (full reference).
