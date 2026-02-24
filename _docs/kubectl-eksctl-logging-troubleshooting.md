@@ -69,6 +69,32 @@ kubectl logs -n kube-system -l k8s-app=aws-node  # VPC CNI (aws-node)
 | `kubectl uncordon <NODE_NAME>` | Allow scheduling on a cordoned node (after `kubectl get nodes`). |
 | `kubectl get cm -n kube-system aws-auth -o yaml` | Debug “access denied” / IAM mapping. |
 
+### 2.2a Pod YAML and image inspection (cheat sheet)
+
+| Command | Purpose |
+|--------|---------|
+| `kubectl get pod <full-pod-name> -o yaml` | Get full YAML of a pod (use exact name from `kubectl get pods`, e.g. `finalizer-cleanup-controller-79658bd4f7-r9d6n`). |
+| `kubectl get pod -l app=<label> -o yaml` | Get YAML for pod(s) matching a label (e.g. `app=finalizer-cleanup-controller`). |
+| `kubectl get pods -A` | List all pods in all namespaces (to find full pod name). |
+| `kubectl describe pod <pod-name>` | Summary + Events; use when you don't need raw YAML. |
+
+**Identifying the image that needs to be updated:** In the pod YAML, look at:
+
+- **`spec.containers[].image`** — the image the pod is *configured* to use (e.g. `finalizer-cleanup-controller:latest`).
+- **`status.containerStatuses[].state.waiting.message`** — the pull error (e.g. "pull access denied", "repository does not exist"). Kubernetes resolves an image without a registry to `docker.io/library/<name>:<tag>`, which often fails for custom images.
+
+**To fix ImagePullBackOff:** Update the **Deployment** (not the pod), so new pods use a pullable image:
+
+```bash
+# Option 1: Edit the deployment
+kubectl edit deployment <deployment-name>
+
+# Option 2: Set image directly
+kubectl set image deployment/<deployment-name> <container-name>=<full-image-url>:<tag>
+```
+
+Set `spec.template.spec.containers[].image` to a **full registry URL** your cluster can pull from (e.g. ECR: `<account-id>.dkr.ecr.<region>.amazonaws.com/finalizer-cleanup-controller:latest`). Build and push your image to that registry first.
+
 ### 2.3 Restarts and recovery
 
 | Command | Where used | Purpose |
